@@ -1,0 +1,6 @@
+services:
+    users.social.facebook:
+        module:     !plugin_dir /social/services/Facebook
+        tags:       { tag: users.social.service, name: facebook }
+        args:
+            - !parameter users.social.facebook.options

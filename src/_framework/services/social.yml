@@ -1,0 +1,6 @@
+services:
+    users.social.manager:
+        module:     !plugin_dir /social/SocialManager
+        public:     true
+        args:
+            - !services { tag: users.social.service, indexBy: tag.name }

@@ -1,0 +1,21 @@
+services:
+    graphql.extensions.user:
+        module:     !plugin_dir /graphql/UsersExtension
+        tags:       graphql.extension
+        args:
+            -  !service users.manager
+            -  !parameter users.graphql.extensions.configuration
+
+    graphql.context.user:
+        module:     !plugin_dir /graphql/UserContext
+        tags:       graphql.context
+        args:
+            -  !service users.user.extractor
+
+    graphql.middleware.permissions:
+        module:     !plugin_dir /graphql/PermissionsMiddleware
+        tags:       { tag: graphql.middleware, name: permissions }
+
+    graphql.middleware.connected:
+        module:     !plugin_dir /graphql/ConnectedMiddleware
+        tags:       { tag: graphql.middleware, name: connected }

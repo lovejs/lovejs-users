@@ -1,0 +1,20 @@
+{
+    "name": "@lovejs/users",
+    "version": "0.0.1",
+    "description": "",
+    "main": "src/index.js",
+    "author": "",
+    "license": "ISC",
+    "dependencies": {
+        "ms": "^2.1.1"
+    },
+    "devDependencies": {
+        "jest": "^21.2.1",
+        "regenerator-runtime": "^0.11.0"
+    },
+    "peerDependencies": {
+        "@lovejs/components": "^0.0.1",
+        "@lovejs/framework": "^0.0.1",
+        "@lovejs/sequelize": "^0.0.1"
+    }
+}

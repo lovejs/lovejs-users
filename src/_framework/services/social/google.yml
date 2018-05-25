@@ -1,0 +1,6 @@
+services:
+    users.social.google:
+        module:     !plugin_dir /social/services/Google
+        tags:       { tag: users.social.service, name: google }
+        args:
+            - !parameter users.social.google.options

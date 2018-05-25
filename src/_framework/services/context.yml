@@ -1,0 +1,5 @@
+services:
+    # List of context extensions
+    http_context.extensions.user:
+        module:  !plugin_dir /context/UserExtension
+        tags:   { tag: love.context.http }

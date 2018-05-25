@@ -1,0 +1,4 @@
+services:
+    users.token.provider:
+        module:     !plugin_dir /jwt/JwtTokenProvider
+        args:       [ !parameter users.jwt.options ]

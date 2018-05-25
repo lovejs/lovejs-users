@@ -1,0 +1,5 @@
+services:
+    middlewares.permissions:
+        module: !plugin_dir middlewares/PermissionsMiddleware
+        args:   [ !service container ]
+        tags:   { tag: love.middleware, name: permissions }
