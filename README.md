@@ -1,2 +1,1 @@
-# lovejs-users
-LoveJs Users plugin
+# Love Js - Users plugin
