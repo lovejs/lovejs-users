@@ -4,7 +4,11 @@
     "version": "0.0.1",
     "description": "Lovejs users",
     "main": "src/index.js",
-    "keywords": ["lovejs", "users", "lovejs plugin"],
+    "keywords": [
+        "lovejs",
+        "users",
+        "lovejs plugin"
+    ],
     "license": "MIT",
     "homepage": "http://lovejs.io/",
     "repository": {
@@ -15,11 +19,19 @@
         "url": "https://github.com/lovejs/lovejs-users/issues"
     },
     "dependencies": {
-        "ms": "^2.1.1"
-    },
-    "devDependencies": {
-        "jest": "^21.2.1",
-        "regenerator-runtime": "^0.11.0"
+        "bcrypt": "^2.0.1",
+        "bluebird": "^3.5.1",
+        "crypto": "^1.0.1",
+        "fb": "^2.0.0",
+        "fbgraph": "^1.4.4",
+        "google-id-token-verifier": "^0.2.3",
+        "jsonwebtoken": "^8.2.1",
+        "lodash": "^4.17.10",
+        "moment": "^2.22.1",
+        "ms": "^2.1.1",
+        "password-generator": "^2.2.0",
+        "querystring": "^0.2.0",
+        "url": "^0.11.0"
     },
     "peerDependencies": {
         "@lovejs/components": "^0.0.1",
