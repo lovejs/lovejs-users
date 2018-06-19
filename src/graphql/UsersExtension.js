@@ -1,5 +1,6 @@
 const _ = require("lodash");
 const { GraphExtension } = require("@lovejs/graphql/src/graphql");
+const UserError = require("../errors/UserError");
 
 const Endless = new Proxy(
     {},
@@ -10,32 +11,43 @@ const Endless = new Proxy(
     }
 );
 
+const handleUserError = async action => {
+    try {
+        return await action();
+    } catch (e) {
+        if (e instanceof UserError) {
+            return { error: e.toGraphql() };
+        } else {
+            throw e;
+        }
+    }
+};
+
 class UsersExtension extends GraphExtension {
-    constructor(manager, configuration) {
+    constructor(manager, config) {
         super();
         this.manager = manager;
-        this.configuration = configuration;
+        this.config = config;
     }
 
-    isEnabled(name, type = "mutation") {
-        let key;
-        switch (type) {
-            case "mutation":
-                key = "mutations";
-                break;
-            case "query":
-                key = "query";
-                break;
-        }
-        return this.configuration[key].includes(name);
+    getConfig(key, def) {
+        return _.get(this.config, key, def);
+    }
+
+    getPrefix() {
+        return this.getConfig("prefix");
+    }
+
+    addType(name) {
+        return this.getConfig("types").includes(name) ? super.addType(name) : Endless;
     }
 
     addQuery(name) {
-        return this.configuration.queries.includes(name) ? super.addQuery(name) : Endless;
+        return this.getConfig("queries").includes(name) ? super.addQuery(name) : Endless;
     }
 
     addMutation(name) {
-        return this.configuration.mutations.includes(name) ? super.addMutation(name) : Endless;
+        return this.getConfig("mutations").includes(name) ? super.addMutation(name) : Endless;
     }
 
     registerObjects() {
@@ -45,31 +57,38 @@ class UsersExtension extends GraphExtension {
     }
 
     registerTypes() {
+        this.addType("Error").properties({
+            operation: "String!",
+            type: "String!"
+        });
+
         this.addType("CurrentUser").properties({
             id: "ID!",
             authed: "Boolean!",
+            validated: "Boolean",
             token: "String",
             username: "String",
             email: "String",
             email_update: "String",
-            ...(this.configuration.profile ? { profile: "Profile" } : {})
+            time_password_update: "DateTime",
+            ...(this.getConfig("profile") ? { profile: this.getConfig("profile.graphql_type") } : {})
         });
 
-        if (this.configuration.social) {
+        if (this.getConfig("social")) {
             this.addType("SocialConnect").properties({
                 service: "String!",
                 linked: "Boolean!",
                 authed: "Boolean!",
                 created: "Boolean!",
                 error: "String",
-                user: "CurrentUser"
+                user: this.ref("CurrentUser")
             });
         }
     }
 
     registerQueries() {
         this.addQuery("currentUser")
-            .output("CurrentUser")
+            .output(this.ref("CurrentUser"))
             .resolver(this.resolveCurrentUser.bind(this));
 
         this.addQuery("emailExists")
@@ -84,52 +103,70 @@ class UsersExtension extends GraphExtension {
     }
 
     registerMutations() {
-        //const { inputs, validation } = this.registerConfig;
+        this.addMutation("login")
+            .input({ email: "String!", password: "String!" })
+            .resolver(this.resolveLogin.bind(this))
+            .output({ user: this.ref("CurrentUser"), error: this.ref("Error") });
 
         this.addMutation("register")
-            //.input(inputs)
-            //.middlewares({ validation })
-            .output("CurrentUser")
+            .input(this.getConfig("register.graphql_inputs"), true)
+            .output(this.ref("CurrentUser"))
             .resolver(this.resolveRegister.bind(this));
 
         this.addMutation("validate")
             .input({ token: "String!" })
-            .output("CurrentUser")
+            .output({ user: this.ref("CurrentUser"), error: this.ref("Error") })
             .resolver(this.resolveValidate.bind(this));
 
-        this.addMutation("login")
-            .input({ email: "String!", password: "String!" })
-            .resolver(this.resolveLogin.bind(this))
-            .output("CurrentUser");
-
-        this.addMutation("social")
-            .input({ service: "String!", access_token: "String!" })
-            .resolver(this.resolveSocial.bind(this))
-            .output("SocialConnect");
+        if (this.getConfig("social")) {
+            this.addMutation("social")
+                .input({ service: "String!", access_token: "String!" })
+                .resolver(this.resolveSocial.bind(this))
+                .output(this.ref("SocialConnect"));
+        }
 
         this.addMutation("forgot")
             .input({ email: "String!" })
             .resolver(this.resolveForgot.bind(this))
-            .output("Boolean");
+            .output({ error: this.ref("Error") });
 
         this.addMutation("reset")
             .input({ token: "String!", password: "String!" })
             .resolver(this.resolveReset.bind(this))
-            .output("Boolean");
+            .output({ error: this.ref("Error") });
 
         this.addMutation("logout")
-            .output("Boolean")
+            .output({ error: this.ref("Error") })
             .resolver(this.resolveLogout.bind(this));
 
+        /* Required connected */
         this.addMutation("updatePassword")
-            .output("Boolean")
+            .middlewares({ connected: true })
+            .output({ user: this.ref("CurrentUser"), error: this.ref("Error") })
             .input({ password_old: "String!", password_new: "String!" })
             .resolver(this.resolveUpdatePassword.bind(this));
 
         this.addMutation("updateEmail")
-            .output("Boolean")
+            .middlewares({ connected: true })
+            .output({ user: this.ref("CurrentUser"), error: this.ref("Error") })
             .input({ email: "String!" })
             .resolver(this.resolveUpdateEmail.bind(this));
+
+        this.addMutation("updateEmailCancel")
+            .middlewares({ connected: true })
+            .output({ user: this.ref("CurrentUser"), error: this.ref("Error") })
+            .resolver(this.resolveUpdateEmailCancel.bind(this));
+
+        this.addMutation("updateEmailResend")
+            .middlewares({ connected: true })
+            .output({ user: this.ref("CurrentUser"), error: this.ref("Error") })
+            .resolver(this.resolveUpdateEmailResend.bind(this));
+
+        this.addMutation("updateEmailValidate")
+            .middlewares({ connected: true })
+            .input({ token: "String!" })
+            .output({ user: this.ref("CurrentUser"), error: this.ref("Error") })
+            .resolver(this.resolveUpdateEmailValidate.bind(this));
     }
 
     async currentUser(user = false, token = false) {
@@ -140,54 +177,58 @@ class UsersExtension extends GraphExtension {
 
         let profile = {};
 
-        if (user && this.configuration.profile && user.getProfile) {
+        if (user && this.getConfig("profile") && user.getProfile) {
             profile = { profile: await user.getProfile() };
         }
 
+        const validated = user && user.get("time_confirmed") ? true : false;
+
         return {
+            ...data,
+            ...profile,
             id: "current",
             authed: user ? true : false,
-            ...data,
-            ...profile
+            validated
         };
     }
 
     async connectUser(user) {
         const token = await this.manager.signIn(user);
-        console.log("token = ", token);
         return await this.currentUser(user, token);
     }
 
     /********************************
      ***         REGISTER         ***
      ********************************/
-    async resolveRegister(_, { input }, context) {
+    async resolveRegister(_, { input }) {
         const user = await this.manager.register(input);
         if (user) {
             return this.connectUser(user);
         }
     }
 
-    async resolveValidate(_, { token }, context) {
-        return this.manager.validate(token);
+    async resolveValidate(_, { token }) {
+        return await handleUserError(async () => {
+            const user = this.manager.validate(token);
+            return { user: this.connectUser(user) };
+        });
     }
 
-    async resolveEmailExists(_, { email }, context) {
+    async resolveEmailExists(_, { email }) {
         return await this.manager.getEmailExists(email);
     }
 
     /********************************
      *** LOGIN / LOGOUT / CURRENT ***
      ********************************/
-    async resolveLogin(_, { email, password }, context) {
-        const user = await this.manager.authenticate(email, password);
-        if (user) {
-            return this.connectUser(user);
-        }
-        return new Error("Invalid credentials");
+    async resolveLogin(_, { email, password }) {
+        return await handleUserError(async () => {
+            const user = await this.manager.authenticate(email, password);
+            return { user: this.connectUser(user) };
+        });
     }
 
-    async resolveLogout(_, {}, context) {
+    async resolveLogout(_, {}) {
         return true;
     }
 
@@ -233,16 +274,17 @@ class UsersExtension extends GraphExtension {
     /********************************
      **** FORGOT AND RESET STUFF ****
      ********************************/
-    async resolveForgot(_, { email }, context) {
-        const found = await this.manager.forgot(email);
-        if (found) {
-            return true;
-        }
-        throw new Error("User not found");
+    async resolveForgot(_, { email }) {
+        return await handleUserError(async () => {
+            await this.manager.forgot(email);
+            return {};
+        });
     }
 
-    async resolveReset(_, { token, password }, context) {
-        return this.manager.reset(token, password);
+    async resolveReset(_, { token, password }) {
+        return await handleUserError(async () => {
+            return await this.manager.reset(token, password);
+        });
     }
 
     async resolveIsForgotTokenValid(_, { token }) {
@@ -252,12 +294,39 @@ class UsersExtension extends GraphExtension {
     /********************************
      ****     ACCOUNT RELATED    ****
      ********************************/
-    async resolveUpdatePassword(_, { password_old, password_new }, context) {
-        return this.manager.updatePassword(context.getUser(), password_old, password_new);
+    async resolveUpdatePassword(_, { password_old, password_new }, { getUser }) {
+        return await handleUserError(async () => {
+            await this.manager.updatePassword(await getUser(), password_old, password_new);
+            return {};
+        });
     }
 
-    async resolveUpdateEmail(_, { email }, context) {
-        return this.manager.updateEmail(context.getUser(), email);
+    async resolveUpdateEmail(_, { email }, { getUser }) {
+        return await handleUserError(async () => {
+            const user = await this.manager.updateEmail(await getUser(), email);
+            return { user: this.currentUser(user) };
+        });
+    }
+
+    async resolveUpdateEmailResend(_, {}, { getUser }) {
+        return await handleUserError(async () => {
+            const user = await this.manager.updateEmailResend(await getUser());
+            return { user: this.currentUser(user) };
+        });
+    }
+
+    async resolveUpdateEmailCancel(_, {}, { getUser }) {
+        return await handleUserError(async () => {
+            const user = await this.manager.updateEmailCancel(await getUser());
+            return { user: this.currentUser(user) };
+        });
+    }
+
+    async resolveUpdateEmailValidate(_, { token }, context) {
+        return await handleUserError(async () => {
+            const user = await this.manager.updateEmailValidate(await context.getUser(), token);
+            return { user: this.currentUser(user) };
+        });
     }
 }
 

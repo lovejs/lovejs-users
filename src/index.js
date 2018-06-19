@@ -72,25 +72,17 @@ class UsersPlugin extends Plugin {
 
         // GraphQL Extension
         if (this.get("graphql")) {
-            const queries = ["currentUser", "emailExists", "isForgotTokenValid"];
-            const mutations = ["register", "validate", "login", "social", "forgot", "reset", "logout", "updatePassword", "updateEmail"];
-
-            container.setParameter("users.graphql.extensions.configuration", {
-                social: hasSocial,
-                profile: hasProfile,
-                queries: _.difference(this.get("graphql.queries.enable", queries), this.get("graphql.queries.disable", [])),
-                mutations: _.difference(this.get("graphql.mutations.enable", mutations), this.get("graphql.mutations.disable", []))
+            container.setParameter("users.graphql.configuration", {
+                prefix: this.get("graphql.prefix"),
+                types: _.difference(this.get("graphql.types.enable"), this.get("graphql.types.disable")),
+                queries: _.difference(this.get("graphql.queries.enable"), this.get("graphql.queries.disable")),
+                mutations: _.difference(this.get("graphql.mutations.enable"), this.get("graphql.mutations.disable")),
+                register: this.get("register"),
+                social: this.get("social"),
+                profile: this.get("profile")
             });
 
-            container.setParameter(
-                "graphql.register.inputs",
-                _.get(this.config, "graphql.register.inputs", {
-                    username: "String!",
-                    email: "String!",
-                    password: "String!"
-                })
-            );
-
+            /*
             container.setParameter(
                 "graphql.register.validation",
                 _.get(this.config, "graphql.register.validation", {
@@ -99,6 +91,7 @@ class UsersPlugin extends Plugin {
                     password: { minLength: 6 }
                 })
             );
+            */
 
             await container.loadDefinitions(this.getPluginDir("/_framework/services/graphql.yml"), origin);
         }

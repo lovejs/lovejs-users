@@ -7,12 +7,15 @@ module.exports = Object.freeze({
         REGISTER: "users.SOCIAL.REGISTER"
     },
 
-    VALIDATE: "users.VALIDATE",
-    CONFIRM: "users.CONFIRM",
+    CONFIRM: "users.CONFIRM", // User need confirm
+    VALIDATE: "users.VALIDATE", // User did validate
+
     FORGOT: "users.FORGOT",
     RESET: "users.RESET",
 
     UPDATE_PASSWORD: "users.UPDATE_PASSWORD",
     UPDATE_EMAIL: "users.UPDATE_EMAIL",
-    UPDATE_EMAIL_CONFIRM: "users.UPDATE_EMAIL_CONFIRM"
+    UPDATE_EMAIL_CANCEL: "users.UPDATE_EMAIL_CANCEL",
+    UPDATE_EMAIL_RESEND: "users.UPDATE_EMAIL_RESEND",
+    UPDATE_EMAIL_VALIDATE: "users.UPDATE_EMAIL_VALIDATE"
 });

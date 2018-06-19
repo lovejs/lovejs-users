@@ -14,6 +14,9 @@ module.exports = (sequelize, { social, modelProfile }) => {
     if (modelProfile) {
         associations = {
             associations: (user, models) => {
+                if (!models[modelProfile]) {
+                    throw new Error(`Trying to associate unknow model '${modelProfile}' as the user profile`);
+                }
                 user.hasOne(models[modelProfile], { foreignKey: "id", sourceKey: "id" });
             }
         };
@@ -28,15 +31,14 @@ module.exports = (sequelize, { social, modelProfile }) => {
             email_update: { type },
             plain_password: { type: DataTypes.VIRTUAL },
             password: { type, allowNull: false },
-
+            token_confirm: { type, unique: true },
+            token_update: { type, unique: true },
+            time_pasword_update: { type: DataTypes.DATE },
             time_confirmed: { type: DataTypes.DATE },
 
             roles: { type: DataTypes.TEXT },
             locale: { type: DataTypes.STRING(10) },
             ...socialFields
-        },
-        options: {
-            underscored: true
         },
         ...associations
     };

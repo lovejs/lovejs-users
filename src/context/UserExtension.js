@@ -7,7 +7,7 @@ class UserExtension {
         const extractor = this.UserExtractor;
 
         return class extends ContextClass {
-            async getUser(name) {
+            async getUser() {
                 if (!this.hasAttribute("user")) {
                     const user = await extractor.getUser(this.getRequest());
                     this.setAttribute("user", user);

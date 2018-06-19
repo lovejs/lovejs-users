@@ -22,7 +22,7 @@ services:
                 database: !parameter users.model.database
                 model:    user
                 service:  model:user
-
+ 
     repository:user:
         module:     !plugin_dir /repository/user
         public:     true
@@ -32,9 +32,9 @@ services:
             - !service users.email.normalizer
             - !service users.password.encoder
 
-    users.email.normalizer:
+    users.email.normalizer: 
         module:     !plugin_dir /others/EmailNormalizer
-   
+
     users.password.encoder:
         alias:      users.password.encoder.bcrypt
 

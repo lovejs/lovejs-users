@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const ms = require("ms");
 const _ = require("lodash");
 const generatePassword = require("password-generator");
+const UserError = require("./errors/UserError");
 
 const generateToken = async () => {
     return new Promise((resolve, reject) => {
@@ -21,8 +22,6 @@ const socialStatus = Object.freeze({
 const events = require("./events/users");
 
 const tokenForgot = token => `forgot:${token}`;
-const tokenConfirmEmail = token => `confirm:${token}`;
-const tokenConfirmUpdateEmail = token => `confirm:update:${token}`;
 
 class UserManager {
     constructor(repository, encoder, token_provider, social_manager, emitter, cache, options) {
@@ -33,8 +32,7 @@ class UserManager {
         this.social_manager = social_manager;
         this.emitter = emitter;
         this.options = _.defaults(options, {
-            forgotExpiration: ms("12h"),
-            confirmExpiration: ms("12h")
+            forgotExpiration: ms("12h")
         });
     }
 
@@ -60,13 +58,16 @@ class UserManager {
     /**
      * Authenticate user with username/email and password
      *
-     * @return user|false
+     * @return user
      */
     async authenticate(email, password) {
         const user = await this.repository.getUser({ email });
+        if (!user) {
+            throw new UserError("authenticate", "user_not_found");
+        }
 
-        if (!user || !await this.encoder.compare(password, user.get("password"))) {
-            return false;
+        if (!(await this.encoder.compare(password, user.get("password")))) {
+            throw new UserError("authenticate", "invalid_credentials");
         }
 
         await this.emit(events.LOGIN, { user });
@@ -92,7 +93,8 @@ class UserManager {
      */
     async confirm(user) {
         const token = await generateToken();
-        await this.cache.store(tokenConfirmEmail(token), user.get("id"), this.options.confirmExpiration);
+        user.set("token_confirm", token);
+        await user.save();
         await this.emit(events.CONFIRM, { user, token });
 
         return true;
@@ -102,17 +104,16 @@ class UserManager {
      * Validate a user email
      */
     async validate(token) {
-        const userId = await this.cache.get(tokenConfirmEmail(token));
-        if (!userId) {
-            return false;
-        }
+        const user = await this.repository.getUser({ token_confirm: token });
 
-        const user = await this.repository.getUser(userId);
         if (!user) {
-            return false;
+            throw new UserError("validate", "user_not_found");
         }
 
-        user.set("time_confirmed", new Date());
+        user.set({
+            time_confirmed: new Date(),
+            token_confirm: null
+        });
         await user.save();
         await this.emit(events.VALIDATE, { user, token });
 
@@ -124,96 +125,137 @@ class UserManager {
      */
     async forgot(email) {
         const user = await this.repository.getUser({ email });
-        if (user) {
-            const token = await generateToken();
-            await this.cache.store(tokenForgot(token), user.get("id"), this.options.forgotExpiration);
-            await this.emit(events.FORGOT, { user, email, token });
-
-            return true;
+        if (!user) {
+            throw new UserError("forgot", "user_not_found");
         }
 
-        return false;
+        const token = await generateToken();
+        await this.cache.set(tokenForgot(token), user.get("id"), this.options.forgotExpiration);
+        await this.emit(events.FORGOT, { user, email, token });
     }
 
     /**
      * Handle user reset password from forgot token
      */
     async reset(token, password) {
-        const userId = await this.cache.get(tokenForgot(token));
+        const tokenKey = tokenForgot(token);
+        const userId = await this.cache.get(tokenKey);
         if (!userId) {
-            return false;
+            throw new UserError("reset", "token_expired");
         }
 
         const user = await this.repository.getUser(userId);
         if (!user) {
-            return false;
+            throw new UserError("reset", "user_not_found");
         }
 
-        user.set("plain_password", password);
+        user.set({
+            time_password_update: new Date(),
+            plain_password: password
+        });
         await user.save();
         await this.emit(events.RESET, { user, password, token });
+        await this.cache.delete(tokenKey);
 
         return user;
     }
+
+    /************************************
+     ******** PASSWORD UPDATING *********
+     ************************************/
 
     /**
      * Handle password update for a user
      */
     async updatePassword(user, oldPassword, newPassword) {
-        if (await this.encoder.compare(oldPassword, user.get("password"))) {
-            user.set("plain_password", newPassword);
-            await user.save();
-            await this.emit(events.UPDATE_PASSWORD, { user, password: newPassword });
-
-            return true;
+        if (!(await this.encoder.compare(oldPassword, user.get("password")))) {
+            throw new UserError("update_password", "password_mismatch");
         }
 
-        return false;
+        user.set({
+            plain_password: newPassword,
+            time_password_update: new Date()
+        });
+        await user.save();
+        await this.emit(events.UPDATE_PASSWORD, { user, password: newPassword });
     }
+
+    /************************************
+     ********** EMAIL UPDATING **********
+     ************************************/
 
     /**
      * Handle email update for user
      */
     async updateEmail(user, email) {
-        if (await this.repository.getEmailExists(email)) {
-            return false;
+        if (await this.repository.getExists({ email })) {
+            throw new UserError("update_email", "email_exists");
         }
-
-        user.set("email_update", email);
-        await user.save();
         const token = await generateToken();
-        await this.cache.store(tokenConfirmUpdateEmail(token), user.get("id"), this.options.confirmExpiration);
+        user.set({
+            email_update: email,
+            token_update: token
+        });
+
+        await user.save();
         await this.emit(events.UPDATE_EMAIL, { user, email, token });
 
-        return true;
+        return user;
     }
 
     /**
-     * Handle email confirme
+     * Handle email update cancel
      */
-    async updateEmailValidate(token) {
-        const userId = await this.cache.get(tokenConfirmUpdateEmail(token));
-        if (!userId) {
-            return false;
-        }
-
-        const user = await this.repository.getUser(userId);
-        if (!user) {
-            return false;
-        }
-
-        const email = user.get("email_update");
-
-        if (await this.repository.getEmailExists(email)) {
-            return false;
-        }
-
-        user.set("email", user.get("email_update"));
-        user.set("email_update", null);
+    async updateEmailCancel(user) {
+        user.set({
+            email_update: null,
+            token_update: null
+        });
 
         await user.save();
+        await this.emit(events.UPDATE_EMAIL_CANCEL, { user });
 
-        return true;
+        return user;
+    }
+
+    /**
+     * Handle email update resend
+     */
+    async updateEmailResend(user) {
+        if (!user.get("email_update")) {
+            throw new UserError("update_email_resend", "email_update_missing");
+        }
+
+        await this.emit(events.UPDATE_EMAIL_RESEND, { user, token: user.get("token_update") });
+
+        return user;
+    }
+
+    /**
+     * Handle email update validation
+     */
+    async updateEmailValidate(token) {
+        const user = await this.repository.getUser({ token_update: token });
+        if (!user) {
+            throw new UserError("update_email_validate", "user_not_found");
+        }
+
+        const newEmail = user.get("email_update");
+
+        if (await this.repository.getEmailExists(email)) {
+            throw new UserError("update_email_validate", "email_exists");
+        }
+
+        user.set({
+            email: newEmail,
+            email_update: null,
+            token_update: null
+        });
+
+        await user.save();
+        await this.emit(events.UPDATE_EMAIL_VALIDATE, { user });
+
+        return user;
     }
 
     /**

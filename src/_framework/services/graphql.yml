@@ -4,7 +4,7 @@ services:
         tags:       graphql.extension
         args:
             -  !service users.manager
-            -  !parameter users.graphql.extensions.configuration
+            -  !parameter users.graphql.configuration
 
     graphql.context.user:
         module:     !plugin_dir /graphql/UserContext

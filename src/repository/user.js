@@ -16,6 +16,7 @@ class UserRepository {
 
     async hookHashPassword(user, options) {
         if (user.get("plain_password")) {
+            console.log("Setting user password bébé");
             user.setDataValue("password", await this.password_encoder.hash(user.get("plain_password")));
         }
     }
