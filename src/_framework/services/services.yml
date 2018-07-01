@@ -3,7 +3,7 @@ services:
         module:   !plugin_dir /UserManager
         public:   true
         args:
-            - !service repository:user
+            - !service repository.user
             - !service { name: !parameter users.manager.password.encoder }
             - !service users.token.provider
             - null
@@ -11,7 +11,7 @@ services:
             - !service { name: !parameter users.cache_service }
             - !parameter managers.user.options
 
-    models-definitions:user:
+    models-definitions.user:
         module:     !plugin_dir /model/user
         args:
             - !service sequelize
@@ -21,13 +21,13 @@ services:
                 tag:      sequelize.model.definition
                 database: !parameter users.model.database
                 model:    user
-                service:  model:user
+                service:  model.user
  
-    repository:user:
+    repository.user:
         module:     !plugin_dir /repository/user
         public:     true
         args:
-            - !service model:user
+            - !service model.user
             - null
             - !service users.email.normalizer
             - !service users.password.encoder
@@ -52,6 +52,6 @@ services:
     users.user.extractor:
         module:     !plugin_dir /others/UserExtractor
         args:
-            - !service  repository:user
+            - !service  repository.user
             - !service  users.token.provider
             - !service  users.token.extractor

@@ -58,7 +58,7 @@ class UsersPlugin extends Plugin {
         // Give the profile service to the user repository
         if (hasProfile) {
             container
-                .getService("repository:user")
+                .getService("repository.user")
                 .getArgs()
                 .replaceArg(1, _service(serviceProfile));
         }
